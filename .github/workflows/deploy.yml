@@ -1,0 +1,50 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc
+
+      - name: Debug Information
+        run: |
+          echo "Debugging connection to VPS..."
+          echo "VPS_HOST: ${{ secrets.VPS_HOST }}"
+          echo "VPS_USERNAME: ${{ secrets.VPS_USERNAME }}"
+          
+      - name: Copy files to VPS
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "."
+          target: "/home/ubuntu/agentSerpWorker"
+          debug: true
+      
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            echo "Current directory: $PWD"
+            cd /home/ubuntu/agentSerpWorker
+            docker build -t agent-serp-worker .
+            docker stop ai-worker || true
+            docker rm ai-worker || true
+            docker run -d --name ai-worker \
+              --restart unless-stopped \
+              -p 8000:8000 \
+              --env-file /home/ubuntu/agentSerpWorker/.env \
+              agent-serp-worker 
