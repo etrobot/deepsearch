@@ -1,5 +1,8 @@
 import re,os
 import openai
+import logging
+
+logger = logging.getLogger(__name__)
 
 def call_grok_api(todo_content, model="grok-3"):
     url = os.environ['GROK3API']
@@ -14,10 +17,11 @@ def call_grok_api(todo_content, model="grok-3"):
     for chunk in resp:
         if chunk.choices and chunk.choices[0].delta.content:
             content_chunk = chunk.choices[0].delta.content
-            print(content_chunk, end="", flush=True)
+            if os.getenv('PROXY_URL'):
+                logger.debug(content_chunk, end="", flush=True)
             response_content += content_chunk
     if not first_chunk:
-        print()  # 只在有内容时换行
+        logger.debug("")  # 只在有内容时换行
     # 提取带属性的<xaiArtifact>标签包裹的内容
     artifact_pattern = r'<xaiArtifact\b[^>]*>(.*?)</xaiArtifact>'
     artifact_matches = re.findall(artifact_pattern, response_content, re.DOTALL)
@@ -73,14 +77,14 @@ def call_grok_api(todo_content, model="grok-3"):
             "summary": data["summary"]
         })
 
-    print(f"总共提取到 {len(links)} 条不重复推文")
+    logger.info(f"总共提取到 {len(links)} 条不重复推文")
 
     # 添加日志，便于调试
     for i, link_data in enumerate(links):
-        print(f"提取到的第{i+1}条推文:")
-        print(f"  ID: {link_data['tweet_id']}")
-        print(f"  链接: {link_data['link']}")
-        print(f"  信息: {link_data['info']}")
-        print(f"  摘要: {link_data['summary']}")
+        logger.debug(f"提取到的第{i+1}条推文:")
+        logger.debug(f"  ID: {link_data['tweet_id']}")
+        logger.debug(f"  链接: {link_data['link']}")
+        logger.debug(f"  信息: {link_data['info']}")
+        logger.debug(f"  摘要: {link_data['summary']}")
 
     return links

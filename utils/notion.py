@@ -1,5 +1,6 @@
 import re
 from notion_client import Client
+import logging
 
 class NotionMarkdownManager:
     def __init__(self, api_key, database_id):
@@ -105,7 +106,6 @@ class NotionMarkdownManager:
         response = self.notion.blocks.children.list(page_id)
         content = ""
         for block in response['results']:
-            # print(block['id'])
             content += self.parse_block(block)
         return content
 
@@ -127,194 +127,324 @@ class NotionMarkdownManager:
                 prev_line_empty = True
         # 4. 重新组合文本
         md_text = '\n'.join(processed_lines)
-        print(f"[markdown_to_notion_blocks] 预处理后的文本行数: {len(processed_lines)}")
+        logging.debug(f"[markdown_to_notion_blocks] 预处理后的文本行数: {len(processed_lines)}")
 
+        def parse_rich_text(text):
+            """将文本解析为带有格式的rich_text"""
+            # 匹配 Markdown 链接和粗体
+            link_pattern = re.compile(r'\[([^\]]+)\]\(([^\)]+)\)')  # 链接
+            bold_pattern = re.compile(r'\*\*(.+?)\*\*')  # 粗体，非贪婪匹配
+            html_bold_pattern = re.compile(r'<b>(.+?)</b>')  # HTML粗体
+
+            matches = []
+            
+            # 收集链接匹配
+            for match in link_pattern.finditer(text):
+                link_text, link_url = match.groups()
+                # 清除链接文本中的HTML标签
+                cleaned_link_text = re.sub(r'<[^>]+>', '', link_text)
+                matches.append((match.start(), match.end(), "link", cleaned_link_text, link_url))
+            
+            # 收集粗体匹配
+            for match in bold_pattern.finditer(text):
+                matches.append((match.start(), match.end(), "bold", match.group(1)))
+            
+            # 收集HTML粗体匹配
+            for match in html_bold_pattern.finditer(text):
+                matches.append((match.start(), match.end(), "bold", match.group(1)))
+            
+            # 按位置排序
+            matches = sorted(matches, key=lambda m: m[0])
+            
+            # 移除重叠匹配
+            non_overlapping = []
+            for match in matches:
+                start, end = match[0], match[1]
+                # 检查是否与之前的匹配重叠
+                overlap = False
+                for prev in non_overlapping:
+                    if (start < prev[1] and end > prev[0]):
+                        overlap = True
+                        break
+                if not overlap:
+                    non_overlapping.append(match)
+            
+            # 构建rich_text
+            rich_text = []
+            last_end = 0
+            for match in non_overlapping:
+                start, end, match_type = match[0], match[1], match[2]
+                
+                # 添加匹配前的文本
+                if start > last_end:
+                    rich_text.append({"type": "text", "text": {"content": text[last_end:start]}})
+                
+                if match_type == "link":
+                    link_text, url = match[3], match[4]
+                    # 检查链接文本中是否包含粗体
+                    bold_in_link = re.search(r'\*\*(.+?)\*\*', link_text)
+                    if bold_in_link:
+                        # 链接+粗体
+                        bold_text = bold_in_link.group(1)
+                        rich_text.append({
+                            "type": "text", 
+                            "text": {"content": bold_text, "link": {"url": url}},
+                            "annotations": {"bold": True}
+                        })
+                    else:
+                        # 普通链接
+                        rich_text.append({
+                            "type": "text", 
+                            "text": {"content": link_text, "link": {"url": url}}
+                        })
+                elif match_type == "bold":
+                    bold_text = match[3]
+                    # 检查粗体中是否包含链接
+                    link_in_bold = re.search(r'\[([^\]]+)\]\(([^\)]+)\)', bold_text)
+                    if link_in_bold:
+                        # 粗体+链接
+                        link_text, url = link_in_bold.groups()
+                        rich_text.append({
+                            "type": "text", 
+                            "text": {"content": link_text, "link": {"url": url}},
+                            "annotations": {"bold": True}
+                        })
+                    else:
+                        # 普通粗体
+                        rich_text.append({
+                            "type": "text", 
+                            "text": {"content": bold_text},
+                            "annotations": {"bold": True}
+                        })
+                
+                last_end = end
+            
+            # 添加最后一段文本
+            if last_end < len(text):
+                rich_text.append({"type": "text", "text": {"content": text[last_end:]}})
+            
+            # 移除空内容
+            rich_text = [rt for rt in rich_text if rt["text"]["content"]]
+            
+            return rich_text
+        
+        def create_paragraph(text):
+            """创建段落块"""
+            rich_text = parse_rich_text(text)
+            return {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {"rich_text": rich_text}
+            }
+        
         def create_heading_1(text):
+            """创建一级标题块"""
+            rich_text = parse_rich_text(text)
             return {
                 "object": "block",
                 "type": "heading_1",
-                "heading_1": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
+                "heading_1": {"rich_text": rich_text}
             }
-
+        
         def create_heading_2(text):
+            """创建二级标题块"""
+            rich_text = parse_rich_text(text)
             return {
                 "object": "block",
                 "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
+                "heading_2": {"rich_text": rich_text}
             }
-
+        
         def create_heading_3(text):
+            """创建三级标题块"""
+            rich_text = parse_rich_text(text)
             return {
                 "object": "block",
                 "type": "heading_3",
-                "heading_3": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
+                "heading_3": {"rich_text": rich_text}
             }
-
+        
         def create_bulleted_list_item(text):
+            """创建无序列表项"""
+            rich_text = parse_rich_text(text)
             return {
                 "object": "block",
                 "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
+                "bulleted_list_item": {"rich_text": rich_text}
             }
-
+        
         def create_numbered_list_item(text):
+            """创建有序列表项"""
+            rich_text = parse_rich_text(text)
             return {
                 "object": "block",
                 "type": "numbered_list_item",
-                "numbered_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
+                "numbered_list_item": {"rich_text": rich_text}
             }
-
+        
         def create_quote(text):
+            """创建引用块"""
+            rich_text = parse_rich_text(text)
             return {
                 "object": "block",
                 "type": "quote",
-                "quote": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
+                "quote": {"rich_text": rich_text}
             }
-
-        def create_link(text, href):
-            return {
-                "type": "text",
-                "text": {
-                    "content": text,
-                    "link": {"url": href}
-                }
-            }
-
+        
         def create_image_block(url):
+            """创建图片块"""
             return {
                 "type": "image",
                 "image": {
                     "type": "external",
-                    "external": {
-                        "url": url
-                    }
+                    "external": {"url": url}
                 }
             }
-
-        def parse_paragraph(text):
-            # Patterns to match Markdown-style links and bold text
-            link_pattern = re.compile(r'\[([^\]]+)\]\((http[^\)]+)\)')
-            rich_text = []
-            last_end = 0
-            seen_links = set()  # To keep track of seen links and avoid duplicates
-
-            # First, handle the links, removing <b> tags and other HTML tags from the link text
-            matches = []
-            for match in link_pattern.finditer(text):
-                link_text, link_url = match.groups()
-                # Remove HTML tags from the link text, including <b> tags
-                cleaned_link_text = re.sub(r'<[^>]+>', '', link_text)
-                if link_url not in seen_links:  # Check if the link is already processed
-                    matches.append((match.start(), match.end(), "link", cleaned_link_text, link_url))
-                    seen_links.add(link_url)  # Mark this link as seen
-
-            bold_pattern = re.compile(r'<b>([^<]+)</b>')
-            # Then handle bold tags and other matches
-            # for match in bold_pattern.finditer(text):
-            #     matches.append((match.start(), match.end(), "bold", match.group(1)))
-
-            # Sort all matches by their start position
-            matches = sorted(matches, key=lambda m: m[0])
-
-            for match in matches:
-                start, end, match_type = match[:3]
-
-                # Add plain text before the match
-                if start > last_end:
-                    rich_text.append({"type": "text", "text": {"content": text[last_end:start]}})
-
-                if match_type == "link":
-                    # Link: clean text and add as a link
-                    cleaned_link_text, link_url = match[3], match[4]
-                    rich_text.append(create_link(cleaned_link_text, link_url))
-                elif match_type == "bold":
-                    # Bold text: add with bold annotation
-                    bold_text = match[3]
-                    rich_text.append({"type": "text", "text": {"content": bold_text}, "annotations": {"bold": True}})
-
-                last_end = end
-
-            # Add any remaining text after the last match
-            if last_end < len(text):
-                rich_text.append({"type": "text", "text": {"content": text[last_end:]}})
-
-            return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
-
+        
+        def create_table_block(rows):
+            """创建表格块"""
+            if not rows or not rows[0]:
+                return None
+            
+            # 确保至少有两行（表头+数据）
+            if len(rows) < 2:
+                rows.append([""] * len(rows[0]))
+            
+            # 处理表格单元格中的格式化文本
+            processed_rows = []
+            for row in rows:
+                processed_row = []
+                for cell in row:
+                    # 为每个单元格处理格式化文本
+                    rich_text = parse_rich_text(cell)
+                    processed_row.append(rich_text)
+                processed_rows.append(processed_row)
+            
+            return {
+                "object": "block",
+                "type": "table",
+                "table": {
+                    "table_width": len(rows[0]),
+                    "has_column_header": True,
+                    "has_row_header": False,
+                    "children": [
+                        {
+                            "type": "table_row",
+                            "table_row": {"cells": processed_rows[i]}
+                        } for i in range(len(processed_rows))
+                    ]
+                }
+            }
+        
         blocks = []
         lines = md_text.split("\n")
-        print(f"[markdown_to_notion_blocks] 总行数: {len(lines)}")
+        logging.debug(f"[markdown_to_notion_blocks] 总行数: {len(lines)}")
+        
         current_paragraph = []
-
+        table_rows = []
+        in_table = False
+        
         for line_idx, line in enumerate(lines):
-            # 处理图片语法
+            # 处理表格
+            if line.strip() and '|' in line:
+                # 检查是否为表格分隔行
+                separator_pattern = re.compile(r'^[\s]*\|[-:\s|]*\|[\s]*$')
+                if separator_pattern.match(line):
+                    # 标记为表格，跳过分隔行
+                    in_table = True
+                    continue
+                
+                # 处理表格行
+                if in_table or (line.strip().startswith('|') and line.strip().endswith('|')):
+                    # 处理累积的段落
+                    if current_paragraph:
+                        blocks.append(create_paragraph("\n".join(current_paragraph)))
+                        current_paragraph = []
+                    
+                    # 处理表格单元格
+                    cells = [cell.strip() for cell in line.strip().split('|')]
+                    if cells[0] == '':
+                        cells = cells[1:]
+                    if cells[-1] == '':
+                        cells = cells[:-1]
+                    
+                    table_rows.append(cells)
+                    in_table = True
+                    continue
+                elif in_table:
+                    # 表格结束
+                    if table_rows:
+                        blocks.append(create_table_block(table_rows))
+                        logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加表格，行数: {len(table_rows)}")
+                        table_rows = []
+                    in_table = False
+            
+            # 表格结束处理
+            if in_table and not line.strip():
+                if table_rows:
+                    blocks.append(create_table_block(table_rows))
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 表格后空行，添加表格，行数: {len(table_rows)}")
+                    table_rows = []
+                in_table = False
+            
+            # 处理图片
             image_match = re.match(r'!\[([^\]]*)\]\(([^)]+)\)', line)
             if image_match:
-                # 如果有累积的段落,先添加段落
                 if current_paragraph:
-                    blocks.append(parse_paragraph("\n".join(current_paragraph)))
-                    current_paragraph = []
-                # 添加图片块    
-                blocks.append(create_image_block(image_match.group(2)))
-                print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加图片块")
-                continue
-            
-            if len(line) == 0:
-                # 如果当前有累积的段落文本，将其作为一个块添加
-                if current_paragraph:
-                    blocks.append(parse_paragraph("\n".join(current_paragraph)))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 空行，添加累积的段落，段落行数: {len(current_paragraph)}")
-                    current_paragraph = []
-                continue
-            
-            if line.startswith(("# ", "## ", "### ", "- ", "1. ", "> ")):
-                # 如果遇到特殊格式，先处理累积的段落
-                if current_paragraph:
-                    blocks.append(parse_paragraph("\n".join(current_paragraph)))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 特殊格式前，添加累积的段落，段落行数: {len(current_paragraph)}")
+                    blocks.append(create_paragraph("\n".join(current_paragraph)))
                     current_paragraph = []
                 
-                # 处理特殊格式的行
+                blocks.append(create_image_block(image_match.group(2)))
+                logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加图片块")
+                continue
+            
+            # 处理空行
+            if not line.strip():
+                if current_paragraph:
+                    blocks.append(create_paragraph("\n".join(current_paragraph)))
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 空行，添加段落，段落行数: {len(current_paragraph)}")
+                    current_paragraph = []
+                continue
+            
+            # 处理特殊格式行
+            if line.startswith(("# ", "## ", "### ", "- ", "1. ", "> ")):
+                if current_paragraph:
+                    blocks.append(create_paragraph("\n".join(current_paragraph)))
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 特殊格式前，添加段落，段落行数: {len(current_paragraph)}")
+                    current_paragraph = []
+                
                 if line.startswith("# "):
                     blocks.append(create_heading_1(line[2:]))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加一级标题")
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加一级标题")
                 elif line.startswith("## "):
                     blocks.append(create_heading_2(line[3:]))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加二级标题")
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加二级标题")
                 elif line.startswith("### "):
                     blocks.append(create_heading_3(line[4:]))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加三级标题")
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加三级标题")
                 elif line.startswith("- "):
                     blocks.append(create_bulleted_list_item(line[2:]))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加无序列表项")
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加无序列表项")
                 elif line.startswith("1. "):
                     blocks.append(create_numbered_list_item(line[3:]))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加有序列表项")
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加有序列表项")
                 elif line.startswith("> "):
                     blocks.append(create_quote(line[2:]))
-                    print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加引用")
+                    logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 添加引用")
             else:
-                # 普通文本行，添加到当前段落
+                # 普通文本行
                 current_paragraph.append(line)
-                print(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 累积到当前段落")
+                logging.debug(f"[markdown_to_notion_blocks] 第{line_idx+1}行: 累积到当前段落")
         
-        # 处理最后剩余的段落文本
-        if current_paragraph:
-            blocks.append(parse_paragraph("\n".join(current_paragraph)))
-            print(f"[markdown_to_notion_blocks] 处理最后剩余的段落，段落行数: {len(current_paragraph)}")
-
-        print(f"[markdown_to_notion_blocks] 总共生成块数: {len(blocks)}")
+        # 处理剩余内容
+        if in_table and table_rows:
+            blocks.append(create_table_block(table_rows))
+            logging.debug(f"[markdown_to_notion_blocks] 处理文件末尾的表格，行数: {len(table_rows)}")
+        elif current_paragraph:
+            blocks.append(create_paragraph("\n".join(current_paragraph)))
+            logging.debug(f"[markdown_to_notion_blocks] 处理最后剩余的段落，段落行数: {len(current_paragraph)}")
+        
+        logging.debug(f"[markdown_to_notion_blocks] 总共生成块数: {len(blocks)}")
         return blocks
 
     def insert_markdown_to_notion(self, md_text, title=None, cover_url=None):
@@ -326,7 +456,7 @@ class NotionMarkdownManager:
                 for block in blocks:
                     if block.get('type') == 'heading_1':
                         title = block['heading_1']['rich_text'][0]['text']['content']
-                        print(f"从内容中提取到标题: {title}")
+                        logging.info(f"从内容中提取到标题: {title}")
                         break
         
         if title is None:
@@ -338,7 +468,7 @@ class NotionMarkdownManager:
             clean_text = '\n'.join(line.strip() for line in clean_text.split('\n') if line.strip())
             # 使用第一行非空文本作为标题
             title = clean_text.split('\n')[0][:60] if clean_text else "Untitled"
-            print(f"未找到标题，使用处理后的内容作为标题: {title}")
+            logging.info(f"未找到标题，使用处理后的内容作为标题: {title}")
 
         # 创建页面参数
         create_params = {
@@ -374,13 +504,13 @@ class NotionMarkdownManager:
         # 创建页面
         response = self.notion.pages.create(**create_params)
         page_id = response['id']
-        print(f"创建空页面成功，ID: {page_id}")
+        logging.info(f"创建空页面成功，ID: {page_id}")
 
         # 分批处理块
         chunk_size = 100
         for i in range(0, len(blocks), chunk_size):
             chunk = blocks[i:i + chunk_size]
-            print(f"添加第 {i//chunk_size + 1} 批块，数量: {len(chunk)}")
+            logging.info(f"添加第 {i//chunk_size + 1} 批块，数量: {len(chunk)}")
             self.notion.blocks.children.append(
                 block_id=page_id,
                 children=chunk
@@ -442,16 +572,35 @@ class NotionMarkdownManager:
         )
 
     def get_page_property(self, page_id, property_name):
-        print(f"[get_page_property] 入参 page_id={page_id}, property_name={property_name}")
+        logging.debug(f"[get_page_property] 入参 page_id={page_id}, property_name={property_name}")
         page = self.notion.pages.retrieve(page_id=page_id)
-        print(f"[get_page_property] 页面属性 keys: {list(page['properties'].keys())}")
+        logging.debug(f"[get_page_property] 页面属性 keys: {list(page['properties'].keys())}")
         prop = page['properties'].get(property_name)
         if not prop:
-            print(f"[get_page_property] 未找到属性: {property_name}")
+            logging.debug(f"[get_page_property] 未找到属性: {property_name}")
             return None
         if prop['type'] == 'rich_text':
             value = ''.join([t['plain_text'] for t in prop['rich_text']])
-            print(f"[get_page_property] rich_text value: {value}")
+            logging.debug(f"[get_page_property] rich_text value: {value}")
             return value
-        print(f"[get_page_property] 属性类型: {prop['type']}，请根据类型自行处理")
+        logging.debug(f"[get_page_property] 属性类型: {prop['type']}，请根据类型自行处理")
         return prop
+
+    def update_page_last_edited_time(self, page_id):
+        """
+        更新页面的 Last edited time 为当前时间
+        Args:
+            page_id (str): 页面ID
+        """
+        logging.info(f"[update_page_last_edited_time] 更新页面 Last edited time: {page_id}")
+        try:
+            # 通过更新一个空的属性来触发 Last edited time 的更新
+            self.notion.pages.update(
+                page_id=page_id,
+                properties={}
+            )
+            logging.info(f"[update_page_last_edited_time] 更新成功")
+            return True
+        except Exception as e:
+            logging.error(f"[update_page_last_edited_time] 更新失败: {str(e)}")
+            return False

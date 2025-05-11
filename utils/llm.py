@@ -91,12 +91,12 @@ def llm_gen_dict(llm: openai.Client, model: str, query: str, format: dict, strea
                     if chunk.choices and chunk.choices[0].delta.content:
                         content_chunk = chunk.choices[0].delta.content
                         if first_chunk:
-                            print("llm:", end=" ", flush=True)
+                            logger.debug("llm:", end=" ", flush=True)
                             first_chunk = False
-                        print(content_chunk, end="", flush=True)
+                        logger.debug(content_chunk, end="", flush=True)
                         response_content += content_chunk
                 if not first_chunk:
-                    print()  # 只在有内容时换行
+                    logger.debug("")  # 只在有内容时换行
 
                 logger.info(f"流式响应完成，收集到的完整内容: {response_content}")
 
@@ -247,7 +247,7 @@ def img2txt(img_url: str, image_promt: str, client: openai.Client = None) -> str
     logger = logging.getLogger('img2txt')
 
     if client is None:
-        client = get_llm_client('siliconflow')
+        client = get_llm_client()
 
     # 检查并确保 img_url 格式正确
     if img_url.startswith('data:'):
@@ -288,9 +288,9 @@ def img2txt(img_url: str, image_promt: str, client: openai.Client = None) -> str
         logger.error(f"处理图片时出错: {error_type} - {error_msg}")
         return f"处理图片时出错: {error_type} - {error_msg[:100]}"
 
-if __name__=='__main__':
-    test = get_llm_client().chat.completions.create(
-        model='gpt-4o-mini',
-        messages=[{'role':'user','content':'hello'}]
-    )
-    print(test)
+# if __name__=='__main__':
+#     test = get_llm_client().chat.completions.create(
+#         model='gpt-4o-mini',
+#         messages=[{'role':'user','content':'hello'}]
+#     )
+#     print(test)
