@@ -1,5 +1,6 @@
 import os,time
 import logging
+import sys
 from utils.llm import get_llm_client,llm_gen_dict
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -28,6 +29,7 @@ def check_required_env_vars():
         'NOTION_API_KEY',
         'NOTION_DATABASE_ID',
         'OPENROUTER_API_KEY',
+        'OPENROUTER_BASE_URL',
         'GROK3API',
         'GROK_API_KEY',
         'SEEDREAM',
@@ -60,10 +62,6 @@ def dailyMission():
     try:
         # 检查环境变量
         check_required_env_vars()
-
-        logger.debug(f"[环境变量] PROXY_URL={os.environ.get('PROXY_URL')}")
-        logger.debug(f"[环境变量] NOTION_API_KEY={'已设置' if os.environ.get('NOTION_API_KEY') else '未设置'}")
-        logger.debug(f"[环境变量] NOTION_DATABASE_ID={os.environ.get('NOTION_DATABASE_ID')}")
 
         discord = DiscordWebhook()
 
@@ -128,8 +126,7 @@ def dailyMission():
                     call_grok_api(todo_prompt,'grok-3-deepsearch'),
                     f"调用 Grok API 处理页面 {id} 的内容"
                 )
-                logger.debug(f"[处理页面][{idx}] grok_result 长度: {len(grok_result)}")
-                logger.debug(f"[处理页面][{idx}] grok_result 前500字符: {grok_result[:500]}")
+                logger.debug(f"[处理页面][{idx}] grok_result 长度: {len(grok_result)} 前500字符: {grok_result[:500]}")
 
                 # 处理封面图片
                 if existing_cover:
@@ -222,6 +219,7 @@ def dailyMission():
         error_msg = f"执行dailyMission出错: {str(e)}\n{traceback.format_exc()}"
         logger.error(f"[定时任务] {error_msg}")
         discord.send_error(error_msg)
+        sys.exit(1)
 
 if __name__ == "__main__":
     scheduler = BlockingScheduler(timezone=timezone('Asia/Shanghai'))
@@ -243,3 +241,4 @@ if __name__ == "__main__":
         logger.error(f"[定时任务] {error_msg}")
         discord = DiscordWebhook()
         discord.send_error(error_msg)
+        sys.exit(1)

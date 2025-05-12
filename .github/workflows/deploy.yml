@@ -45,7 +45,6 @@ jobs:
             docker stop deepserper || true
             docker rm deepserper || true
             docker run -d --name deepserper \
-              --restart unless-stopped \
               -e NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}" \
               -e NOTION_DATABASE_ID="${{ secrets.NOTION_DATABASE_ID }}" \
               -e OPENROUTER_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
