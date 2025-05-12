@@ -7,9 +7,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: deepsearch
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -20,7 +21,7 @@ jobs:
           echo "Debugging connection to VPS..."
           echo "VPS_HOST: ${{ secrets.VPS_HOST }}"
           echo "VPS_USERNAME: ${{ secrets.VPS_USERNAME }}"
-          
+
       - name: Copy files to VPS
         uses: appleboy/scp-action@master
         with:
@@ -30,7 +31,7 @@ jobs:
           source: "."
           target: "/home/ubuntu/deepsearch"
           debug: true
-      
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
         with:
@@ -47,4 +48,4 @@ jobs:
               --restart unless-stopped \
               -p 8000:8000 \
               --env-file /home/ubuntu/deepsearch/.env \
-              agent-serp-worker 
+              agent-serp-worker
