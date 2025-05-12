@@ -1,32 +1,24 @@
-# Use the official Python 3.11 slim image
 FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/root/.cargo/bin:${PATH}"
+    PYTHONDONTWRITEBYTECODE=1
 
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies, Rust and Git
+# Install system dependencies, Git and build essentials
 RUN apt-get update && \
-    apt-get install -y curl build-essential git cmake && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
-    . $HOME/.cargo/env
+    apt-get install -y curl build-essential git cmake
 
-# Verify Rust installation
-RUN cargo --version
-
-# Install poetry
-RUN pip install poetry
+# Install uv
+RUN pip install uv
 
 # Copy poetry files
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock ./
 
-# Install dependencies using poetry
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi
+# Install dependencies using uv
+RUN uv pip install -e .
 
 # Copy the application code
 COPY . .
