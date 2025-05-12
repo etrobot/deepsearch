@@ -29,20 +29,24 @@ def check_required_env_vars():
         'NOTION_DATABASE_ID',
         'OPENROUTER_API_KEY',
         'GROK3API',
-        'GROK_API_KEY'
+        'GROK_API_KEY',
         'SEEDREAM',
         'DREAMINA',
         'DAILY_TIME',
-        'DISCORD_WEBHOOK_IDs'
+        'DISCORD_WEBHOOK_ID'
     ]
 
     missing_vars = []
     for var in required_env_vars:
-        if not os.environ.get(var):
+        value = os.environ.get(var)
+        logger.debug(f"检查环境变量 {var}: {'已设置' if value else '未设置'}")
+        if not value:
             missing_vars.append(var)
 
     if missing_vars:
-        raise EnvironmentError(f"缺少必需的环境变量: {', '.join(missing_vars)}")
+        error_msg = f"缺少必需的环境变量: {', '.join(missing_vars)}"
+        logger.error(error_msg)
+        raise EnvironmentError(error_msg)
 
 def validate_notion_response(response, context=""):
     """验证 Notion API 响应"""
