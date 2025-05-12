@@ -2,6 +2,7 @@ import os,time
 import logging
 import sys
 from utils.llm import get_llm_client,llm_gen_dict
+from utils.vars import check_required_env_vars
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from pytz import timezone
@@ -10,8 +11,7 @@ from utils.ripGrok import call_grok_api
 from utils.discord import DiscordWebhook
 from dotenv import load_dotenv,find_dotenv
 from utils.seedream import generate_image
-import random
-import traceback
+import random,traceback
 
 # 配置logging
 logging.basicConfig(
@@ -22,33 +22,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv(find_dotenv())
-
-def check_required_env_vars():
-    """检查必需的环境变量是否已设置"""
-    required_env_vars = [
-        'NOTION_API_KEY',
-        'NOTION_DATABASE_ID',
-        'OPENROUTER_API_KEY',
-        'OPENROUTER_BASE_URL',
-        'GROK3API',
-        'GROK_API_KEY',
-        'SEEDREAM',
-        'DREAMINA',
-        'DAILY_TIME',
-        'DISCORD_WEBHOOK_ID'
-    ]
-
-    missing_vars = []
-    for var in required_env_vars:
-        value = os.environ.get(var)
-        logger.debug(f"检查环境变量 {var}: {'已设置' if value else '未设置'}")
-        if not value:
-            missing_vars.append(var)
-
-    if missing_vars:
-        error_msg = f"缺少必需的环境变量: {', '.join(missing_vars)}"
-        logger.error(error_msg)
-        raise EnvironmentError(error_msg)
 
 def validate_notion_response(response, context=""):
     """验证 Notion API 响应"""
@@ -94,8 +67,40 @@ def dailyMission():
                 if not todo_prompt:
                     raise ValueError(f"页面 {id} 内容为空")
 
-                logger.debug(f"[处理页面][{idx}] 文章内容长度: {len(todo_prompt)}")
-                logger.debug(f"[处理页面][{idx}] 文章内容前200字符: {todo_prompt[:200]}")
+                # 从页面中提取 mention 内容
+                logger.info(f"[处理页面][{idx}] 提取页面 mention 内容")
+                page_info = manager.notion.pages.retrieve(page_id=id)
+                mention_content = ""
+                mention_block_id = None
+                
+                try:
+                    # 获取页面内容
+                    blocks = manager.notion.blocks.children.list(block_id=id)
+                    for block in blocks.get('results', []):
+                        if block.get('type') == 'paragraph':
+                            rich_text = block.get('paragraph', {}).get('rich_text', [])
+                            for text in rich_text:
+                                if text.get('type') == 'mention' and text.get('mention', {}).get('type') == 'page':
+                                    mention_content = text.get('plain_text', '')
+                                    mention_block_id = block.get('id')
+                                    logger.debug(f"[处理页面][{idx}] 提取到 mention 内容: {mention_content}")
+                                    break
+                except Exception as e:
+                    logger.warning(f"[处理页面][{idx}] 提取 mention 内容失败: {str(e)}")
+                
+                # 构造参考数据
+                reference_data=''
+                if mention_content:
+                    reference_data = f"""I recently do some research like:
+And I have an article about it:
+{mention_content}
+Now I need to update it.
+{todo_prompt}
+"""
+
+                todo_prompt = reference_data + todo_prompt
+                
+                logger.debug(f"[处理页面][{idx}] 添加参考数据后的内容长度: {len(todo_prompt)} 前200字符: {todo_prompt[:200]}")
 
                 # 获取页面封面信息
                 logger.info(f"[处理页面][{idx}] 获取页面信息")
@@ -112,7 +117,7 @@ def dailyMission():
                     'title_en':'upper title in english with \n， change lines between time, description and the leading role，such as 2025\nTOP 5\nREASONING MODEL',
                     'title_cn':'中文标题带换行（年份\n描述\n主体，比如"2025\n排名前五\n推理模型"）'
                 }
-                title_prompt = '\n\nWrite a title for this youtube video.'
+                title_prompt = '\n\nWrite a title for this youtube video in 2025.'
 
                 logger.info(f"[处理页面][{idx}] 生成标题")
                 titles = validate_notion_response(
@@ -193,6 +198,34 @@ def dailyMission():
 
                 logger.info(f"[处理页面][{idx}] 更新原页面的最后编辑时间")
                 manager.update_page_last_edited_time(id)
+
+                # 创建 mention 块
+                mention_block = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "mention",
+                                "mention": {
+                                    "type": "page",
+                                    "page": {
+                                        "id": new_page_id
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+                
+                # 将 mention 添加到原始页面
+                if mention_block_id:
+                    # 如果存在旧的 mention，先删除它
+                    logger.info(f"[处理页面][{idx}] 删除旧的 mention 块")
+                    manager.notion.blocks.delete(block_id=mention_block_id)
+                
+                logger.info(f"[处理页面][{idx}] 将新页面作为 mention 添加到原始页面")
+                manager.append_blocks(id, [mention_block])
 
                 success_count += 1
                 logger.info(f"[处理页面][{idx}] 页面处理完成")
