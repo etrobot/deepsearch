@@ -93,7 +93,7 @@ def llm_gen_dict(llm: openai.Client, model: str, query: str, format: dict, strea
                         if first_chunk:
                             logger.debug("llm:", end=" ", flush=True)
                             first_chunk = False
-                        logger.debug(content_chunk, end="", flush=True)
+                        print(content_chunk, end="", flush=True)
                         response_content += content_chunk
                 if not first_chunk:
                     logger.debug("")  # 只在有内容时换行

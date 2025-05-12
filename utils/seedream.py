@@ -7,6 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def generate_image(prompt:str):
+    logger.info(f'[generate_image] 开始处理, prompt长度: {len(prompt)}')
     jsonformat={
         'description':'someone some action somewhere',
     }
@@ -19,7 +20,7 @@ DONT USE BRANDS OR PRODUCTS SUCH AI OPENAI, GOOGLE, XAI, ANTHROPIC AND SO ON!
     llm_client = get_llm_client()
     model='gpt-4o-mini'
     desc = llm_gen_dict(llm_client,model,prompt,jsonformat)
-    logger.info(f'keyword:{desc}')
+    logger.info(f'[generate_image] 生成的描述: {desc}')
 
     # 构建请求数据
     headers = {
@@ -44,11 +45,9 @@ DONT USE BRANDS OR PRODUCTS SUCH AI OPENAI, GOOGLE, XAI, ANTHROPIC AND SO ON!
     result = response.json()
     os.makedirs('downloads', exist_ok=True)
     
-    chosen_url = random.choice(result['data'])['url']
-    logger.info(f"[generate_image] chosen_url:{chosen_url}")
-
-    urls = [x['url'] for x in result['data'] if x['url'] != chosen_url]
+    urls = [x['url'] for x in result['data']]
+    logger.info(f"[generate_image] 生成的图片数量: {len(urls)}")
     for i, image_url in enumerate(urls):
         logger.debug(f"[generate_image] 生成图片URL {i+1}: {image_url}")        
-    # 随机返回一个URL
-    return chosen_url
+
+    return urls

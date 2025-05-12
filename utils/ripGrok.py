@@ -18,7 +18,7 @@ def call_grok_api(todo_content, model="grok-3"):
         if chunk.choices and chunk.choices[0].delta.content:
             content_chunk = chunk.choices[0].delta.content
             if os.getenv('PROXY_URL'):
-                logger.debug(content_chunk, end="", flush=True)
+                print(content_chunk, end="", flush=True)
             response_content += content_chunk
     if not first_chunk:
         logger.debug("")  # 只在有内容时换行
