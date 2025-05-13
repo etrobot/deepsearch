@@ -31,16 +31,14 @@ def validate_notion_response(response, context=""):
 
 def get_todo_prompt(manager, page_id):
     """
-    获取页面的 todo_prompt 内容，包括页面内容和 mention 内容
+    获取页面的内容
 
     Args:
         manager: NotionMarkdownManager 实例
         page_id: Notion 页面 ID
 
     Returns:
-        tuple: (todo_prompt, mention_block_id)
-            - todo_prompt: 包含页面内容和 mention 内容的 prompt
-            - mention_block_id: mention 块的 ID，用于后续删除
+        str: 页面内容
     """
     logger.info(f"[get_todo_prompt] 开始获取页面 {page_id} 的内容")
 
@@ -53,42 +51,8 @@ def get_todo_prompt(manager, page_id):
     if not todo_prompt:
         raise ValueError(f"页面 {page_id} 内容为空")
 
-    # 提取页面中的 mention 内容
-    logger.info(f"[get_todo_prompt] 提取页面 {page_id} 的 mention 内容")
-    mention_content = ""
-    mention_block_id = None
-    try:
-        blocks = manager.notion.blocks.children.list(block_id=page_id)
-        for block in blocks.get('results', []):
-            if block.get('type') == 'paragraph':
-                rich_text = block.get('paragraph', {}).get('rich_text', [])
-                for text in rich_text:
-                    if text.get('type') == 'mention' and text.get('mention', {}).get('type') == 'page':
-                        mentioned_page_id = text.get('mention', {}).get('page', {}).get('id')
-                        if mentioned_page_id:
-                            logger.info(f"[get_todo_prompt] 找到 mention 页面 ID: {mentioned_page_id}")
-                            mention_content = validate_notion_response(
-                                manager.get_article_content(mentioned_page_id),
-                                f"获取 mention 页面 {mentioned_page_id} 的内容"
-                            ).strip()
-                            mention_block_id = block.get('id')
-                            logger.debug(f"[get_todo_prompt] 提取到 mention 内容: {mention_content}")
-                            break
-    except Exception as e:
-        logger.warning(f"[get_todo_prompt] 提取 mention 内容失败: {str(e)}")
-
-    # 构造参考数据
-    if mention_content:
-        reference_data = f"""I recently do some research like:
-And I have an article about it:
-{mention_content}
-Now I need to update it.
-{todo_prompt}
-"""
-        todo_prompt = reference_data + todo_prompt
-
     logger.debug(f"[get_todo_prompt] 最终内容长度: {len(todo_prompt)} 前200字符: {todo_prompt[:200]}")
-    return todo_prompt, mention_block_id
+    return todo_prompt
 
 def dailyMission():
     logger.info(f"[定时任务] 开始执行dailyMission - {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -119,8 +83,8 @@ def dailyMission():
                 status = page['properties']['Status']['status']['name']
                 logger.info(f"[处理页面][{idx}] 开始处理页面: id={id}, status={status}")
 
-                # 获取 todo_prompt 和 mention_block_id
-                todo_prompt, mention_block_id = get_todo_prompt(manager, id)
+                # 获取 todo_prompt
+                todo_prompt = get_todo_prompt(manager, id)
 
                 # 获取页面封面信息
                 logger.info(f"[处理页面][{idx}] 获取页面信息")
@@ -218,34 +182,6 @@ def dailyMission():
 
                 logger.info(f"[处理页面][{idx}] 更新原页面的最后编辑时间")
                 manager.update_page_last_edited_time(id)
-
-                # 创建 mention 块
-                mention_block = {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [
-                            {
-                                "type": "mention",
-                                "mention": {
-                                    "type": "page",
-                                    "page": {
-                                        "id": new_page_id
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                }
-
-                # 将 mention 添加到原始页面
-                if mention_block_id:
-                    # 如果存在旧的 mention，先删除它
-                    logger.info(f"[处理页面][{idx}] 删除旧的 mention 块")
-                    manager.notion.blocks.delete(block_id=mention_block_id)
-
-                logger.info(f"[处理页面][{idx}] 将新页面作为 mention 添加到原始页面")
-                manager.append_blocks(id, [mention_block])
 
                 success_count += 1
                 logger.info(f"[处理页面][{idx}] 页面处理完成")
