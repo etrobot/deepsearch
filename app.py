@@ -29,6 +29,67 @@ def validate_notion_response(response, context=""):
         raise ValueError(f"Notion API 返回空响应 {context}")
     return response
 
+def get_todo_prompt(manager, page_id):
+    """
+    获取页面的 todo_prompt 内容，包括页面内容和 mention 内容
+
+    Args:
+        manager: NotionMarkdownManager 实例
+        page_id: Notion 页面 ID
+
+    Returns:
+        tuple: (todo_prompt, mention_block_id)
+            - todo_prompt: 包含页面内容和 mention 内容的 prompt
+            - mention_block_id: mention 块的 ID，用于后续删除
+    """
+    logger.info(f"[get_todo_prompt] 开始获取页面 {page_id} 的内容")
+
+    # 获取页面主要内容
+    todo_prompt = validate_notion_response(
+        manager.get_article_content(page_id),
+        f"获取页面 {page_id} 的内容"
+    ).strip()
+
+    if not todo_prompt:
+        raise ValueError(f"页面 {page_id} 内容为空")
+
+    # 提取页面中的 mention 内容
+    logger.info(f"[get_todo_prompt] 提取页面 {page_id} 的 mention 内容")
+    mention_content = ""
+    mention_block_id = None
+    try:
+        blocks = manager.notion.blocks.children.list(block_id=page_id)
+        for block in blocks.get('results', []):
+            if block.get('type') == 'paragraph':
+                rich_text = block.get('paragraph', {}).get('rich_text', [])
+                for text in rich_text:
+                    if text.get('type') == 'mention' and text.get('mention', {}).get('type') == 'page':
+                        mentioned_page_id = text.get('mention', {}).get('page', {}).get('id')
+                        if mentioned_page_id:
+                            logger.info(f"[get_todo_prompt] 找到 mention 页面 ID: {mentioned_page_id}")
+                            mention_content = validate_notion_response(
+                                manager.get_article_content(mentioned_page_id),
+                                f"获取 mention 页面 {mentioned_page_id} 的内容"
+                            ).strip()
+                            mention_block_id = block.get('id')
+                            logger.debug(f"[get_todo_prompt] 提取到 mention 内容: {mention_content}")
+                            break
+    except Exception as e:
+        logger.warning(f"[get_todo_prompt] 提取 mention 内容失败: {str(e)}")
+
+    # 构造参考数据
+    if mention_content:
+        reference_data = f"""I recently do some research like:
+And I have an article about it:
+{mention_content}
+Now I need to update it.
+{todo_prompt}
+"""
+        todo_prompt = reference_data + todo_prompt
+
+    logger.debug(f"[get_todo_prompt] 最终内容长度: {len(todo_prompt)} 前200字符: {todo_prompt[:200]}")
+    return todo_prompt, mention_block_id
+
 def dailyMission():
     logger.info(f"[定时任务] 开始执行dailyMission - {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -58,49 +119,8 @@ def dailyMission():
                 status = page['properties']['Status']['status']['name']
                 logger.info(f"[处理页面][{idx}] 开始处理页面: id={id}, status={status}")
 
-                logger.info(f"[处理页面][{idx}] 获取文章内容")
-                todo_prompt = validate_notion_response(
-                    manager.get_article_content(id),
-                    f"获取页面 {id} 的内容"
-                ).strip()
-
-                if not todo_prompt:
-                    raise ValueError(f"页面 {id} 内容为空")
-
-                # 从页面中提取 mention 内容
-                logger.info(f"[处理页面][{idx}] 提取页面 mention 内容")
-                page_info = manager.notion.pages.retrieve(page_id=id)
-                mention_content = ""
-                mention_block_id = None
-                
-                try:
-                    # 获取页面内容
-                    blocks = manager.notion.blocks.children.list(block_id=id)
-                    for block in blocks.get('results', []):
-                        if block.get('type') == 'paragraph':
-                            rich_text = block.get('paragraph', {}).get('rich_text', [])
-                            for text in rich_text:
-                                if text.get('type') == 'mention' and text.get('mention', {}).get('type') == 'page':
-                                    mention_content = text.get('plain_text', '')
-                                    mention_block_id = block.get('id')
-                                    logger.debug(f"[处理页面][{idx}] 提取到 mention 内容: {mention_content}")
-                                    break
-                except Exception as e:
-                    logger.warning(f"[处理页面][{idx}] 提取 mention 内容失败: {str(e)}")
-                
-                # 构造参考数据
-                reference_data=''
-                if mention_content:
-                    reference_data = f"""I recently do some research like:
-And I have an article about it:
-{mention_content}
-Now I need to update it.
-{todo_prompt}
-"""
-
-                todo_prompt = reference_data + todo_prompt
-                
-                logger.debug(f"[处理页面][{idx}] 添加参考数据后的内容长度: {len(todo_prompt)} 前200字符: {todo_prompt[:200]}")
+                # 获取 todo_prompt 和 mention_block_id
+                todo_prompt, mention_block_id = get_todo_prompt(manager, id)
 
                 # 获取页面封面信息
                 logger.info(f"[处理页面][{idx}] 获取页面信息")
@@ -217,13 +237,13 @@ Now I need to update it.
                         ]
                     }
                 }
-                
+
                 # 将 mention 添加到原始页面
                 if mention_block_id:
                     # 如果存在旧的 mention，先删除它
                     logger.info(f"[处理页面][{idx}] 删除旧的 mention 块")
                     manager.notion.blocks.delete(block_id=mention_block_id)
-                
+
                 logger.info(f"[处理页面][{idx}] 将新页面作为 mention 添加到原始页面")
                 manager.append_blocks(id, [mention_block])
 
@@ -255,19 +275,21 @@ Now I need to update it.
         sys.exit(1)
 
 if __name__ == "__main__":
-    scheduler = BlockingScheduler(timezone=timezone('Asia/Shanghai'))
+    scheduler = BlockingScheduler(timezone=timezone('UTC'))
     try:
         check_required_env_vars()
-        hour, minute = map(int, os.environ['DAILY_TIME'].split(':'))
+        # 将东八区的时间转换为UTC时间
+        local_hour, local_minute = map(int, os.environ['DAILY_TIME'].split(':'))
+        utc_hour = (local_hour - 8) % 24  # 东八区减8小时
         scheduler.add_job(
             dailyMission,
             trigger=CronTrigger(
-                hour=hour,
-                minute=minute
+                hour=utc_hour,
+                minute=local_minute
             ),
             name='daily_notion_mission'
         )
-        logger.info(f"[定时任务] 服务已启动，将在每天{hour}:{minute}执行任务")
+        logger.info(f"[定时任务] 服务已启动，UTC时间{utc_hour}:{local_minute}执行任务（对应北京时间{local_hour}:{local_minute}）")
         scheduler.start()
     except Exception as e:
         error_msg = f"启动定时任务失败: {str(e)}\n{traceback.format_exc()}"
