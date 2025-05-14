@@ -103,10 +103,12 @@ def dailyMission():
                     f"调用 Grok API 处理页面 {id} 的内容"
                 )
                 summary = llm_gen_dict(get_llm_client(),'gpt-4o-mini',grok_result+'extract the best choice of these arcicle',
-                    {"best_picked":"the best pick from the data","related_links":["link1","link2","..."]}
+                    {"summary":"summary in one sentence",
+                     "best_picked":"the best pick from the data",
+                     "related_links":["link1","link2","..."]}
                 )
                 grok_result = validate_notion_response(
-                    call_grok_api(summary['best_picked']+'\n\nUse embedding mode to find at least 5 best posts for this topc and ouput a ranking board in xaiArtifact','grok-3-deepsearch'),
+                    call_grok_api(summary['summary']+summary['best_picked']+'\nUse embedding mode to find at least 5 best posts for this topic and ouput a ranking board in xaiArtifact','grok-3-deepsearch'),
                     f"调用 Grok API 处理 {summary} 的内容"
                 )
                 logger.debug(f"[处理页面][{idx}] grok_result 长度: {len(grok_result)} 前500字符: {grok_result[:500]}")
