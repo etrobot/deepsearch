@@ -97,25 +97,30 @@ def dailyMission():
                     existing_cover = None
                 logger.info(f"[处理页面][{idx}] 页面现有封面URL: {existing_cover}")
 
-                title_format = {
-                    'title_en':'upper title in english with \n， change lines between time, description and the leading role，such as 2025\nTOP 5\nREASONING MODEL',
-                    'title_cn':'中文标题带换行（年份\n描述\n主体，比如"2025\n排名前五\n推理模型"）'
-                }
-                title_prompt = '\n\nWrite a title for this youtube video in 2025.'
-
-                logger.info(f"[处理页面][{idx}] 生成标题")
-                titles = validate_notion_response(
-                    llm_gen_dict(get_llm_client(),'gpt-4o-mini',todo_prompt+title_prompt,title_format),
-                    f"生成页面 {id} 的标题"
-                )
-                logger.info(f"[处理页面][{idx}] 生成的标题: {titles}")
-
                 logger.info(f"[处理页面][{idx}] 调用 grok api")
                 grok_result = validate_notion_response(
                     call_grok_api(todo_prompt,'grok-3-deepsearch'),
                     f"调用 Grok API 处理页面 {id} 的内容"
                 )
+                summary = llm_gen_dict(get_llm_client(),'gpt-4o-mini',grok_result+'extract the best choice of these arcicle',
+                    {"best_picked":"the best pick from the data","related_links":["link1","link2","..."]}
+                )
+                grok_result = validate_notion_response(
+                    call_grok_api(summary['best_picked']+'\n\nUse embedding mode to find at least 5 best posts for this topc and ouput a ranking board in xaiArtifact','grok-3-deepsearch'),
+                    f"调用 Grok API 处理 {summary} 的内容"
+                )
                 logger.debug(f"[处理页面][{idx}] grok_result 长度: {len(grok_result)} 前500字符: {grok_result[:500]}")
+                title_format = {
+                    'title_en':'upper title in english with \n， change lines between time, description and the leading role，such as 2025\nTOP 5\nREASONING MODEL',
+                    'title_cn':'中文标题带换行（年份\n描述\n主体，比如"2025\n排名前五\n推理模型"）'
+                }
+                title_prompt = '\n\nWrite a title for this youtube video in 2025.'
+                logger.info(f"[处理页面][{idx}] 生成标题")
+                titles = validate_notion_response(
+                    llm_gen_dict(get_llm_client(),'gpt-4o-mini',grok_result+title_prompt,title_format),
+                    f"生成页面 {id} 的标题"
+                )
+                logger.info(f"[处理页面][{idx}] 生成的标题: {titles}")
 
                 # 处理封面图片
                 if existing_cover:
