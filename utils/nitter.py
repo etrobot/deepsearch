@@ -137,7 +137,7 @@ def check_thread_using_nitter(nitter_link:str):
     links = extract_thread_links_nitter(rawhtml)
     return links
 
-def nitter_list_rss(list_id):
+def nitter_list_rss(rss_url):
     """将RSS内容转换为markdown格式的文本
 
     Args:
@@ -146,8 +146,6 @@ def nitter_list_rss(list_id):
     Returns:
         str: 包含所有条目的markdown格式文本
     """
-    rss_url = DEFAULT_BASE_URL + f'i/lists/{list_id}/rss?key={os.environ["NITTER_TOKEN"]}'
-    logger.info(f"获取RSS: {rss_url}")
 
     feed = parse(rss_url)
     result = []
@@ -160,7 +158,7 @@ def nitter_list_rss(list_id):
         text_maker.ignore_links = True    # 保留链接
         content = entry.description.replace('http://localhost:8080','x.com').replace('localhost:8080','x.com').replace('#m','')
         content = text_maker.handle(content)
-        markdown_text = f"[id-{i}]({link})\n{content}\n---\n"
+        markdown_text = f"[{i}]({link})\n{content}\n---\n"
         result.append(markdown_text)
 
     return "\n".join(result)

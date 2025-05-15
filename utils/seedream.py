@@ -2,41 +2,8 @@ import os
 from utils.llm import llm_gen_dict,get_llm_client
 import requests
 import logging
-from pyairtable import Table
 
 logger = logging.getLogger(__name__)
-
-def get_seedream_key():
-    """从 Airtable 获取 SEEDREAM 配置，包括密钥和URL
-    Returns:
-         dict: 包含 cookie_value 和 url 的字典
-    """
-    logger.info("[get_seedream_key] 开始从 Airtable 获取 SEEDREAM 密钥")
-    try:
-        airtable_key = os.environ.get('AIRTABLE_KEY')
-        base_id = os.environ.get('AIRTABLE_BASE_ID')
-        table_name = 'cookies'
-
-        table = Table(airtable_key, base_id, table_name)
-        records = table.all(formula=f"{{Name}} = 'dreamina'")
-        print(records)
-        for record in records:
-            if record['fields'].get('Name') == 'dreamina':
-                seedream_key = record['fields'].get('cookie_value')
-                dreamina_endpoint = record['fields'].get('endpoint')
-                if seedream_key and dreamina_endpoint:
-                    logger.info("[get_seedream_key] 成功获取 SEEDREAM 配置, cookie_value: {}， endpoint: {}".format(seedream_key, dreamina_endpoint))
-                    return {"cookie_value": seedream_key, "endpoint": dreamina_endpoint}
-                else:
-                    logger.error("[get_seedream_key] 未获取到完整的SEEDREAM配置, cookie_value: {}， endpoint: {}".format(seedream_key, dreamina_endpoint))
-                    return None
-
-        logger.error("[get_seedream_key] 未在 Airtable 中找到 SEEDREAM 配置")
-        return None
-
-    except Exception as e:
-        logger.error(f"[get_seedream_key] 获取 SEEDREAM 配置失败: {str(e)}")
-        return None
 
 def generate_image(prompt:str):
     logger.info(f'[generate_image] 开始处理, prompt长度: {len(prompt)}')
@@ -54,14 +21,13 @@ DONT USE BRANDS OR PRODUCTS SUCH AI OPENAI, GOOGLE, XAI, ANTHROPIC AND SO ON!
     desc = llm_gen_dict(llm_client,model,prompt,jsonformat)
     logger.info(f'[generate_image] 生成的描述: {desc}')
 
-    # 获取 SEEDREAM 配置，包括密钥和URL
-    config = get_seedream_key()
-    if not config:
-        logger.error("[generate_image] 无法获取 SEEDREAM 配置")
-        return []
+    # 从环境变量获取配置
+    api_key = os.environ['DREAMINA_API_KEY']
+    base_url = os.environ['DREAMINA_BASE_URL']
+    
     # 构建请求数据
     headers = {
-        'Authorization': f'Bearer {config["cookie_value"]}'
+        'Authorization': f'Bearer {api_key}'
     }
 
     data = {
@@ -74,7 +40,7 @@ DONT USE BRANDS OR PRODUCTS SUCH AI OPENAI, GOOGLE, XAI, ANTHROPIC AND SO ON!
 
     # 发送请求
     response = requests.post(
-        config["endpoint"],
+        base_url,
         headers=headers,
         json=data
     )
