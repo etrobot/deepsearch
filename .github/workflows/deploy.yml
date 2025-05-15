@@ -49,7 +49,6 @@ jobs:
               -e NOTION_DATABASE_ID="${{ secrets.NOTION_DATABASE_ID }}" \
               -e OPENROUTER_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
               -e OPENROUTER_BASE_URL="${{ secrets.OPENROUTER_BASE_URL }}" \
-              -e SEEDREAM="${{ secrets.SEEDREAM }}" \
               -e DREAMINA="${{ secrets.DREAMINA }}" \
               -e GROK_API_KEY="${{ secrets.GROK_API_KEY }}" \
               -e GROK3API="${{ secrets.GROK3API }}" \
@@ -57,4 +56,6 @@ jobs:
               -e DISCORD_WEBHOOK_ID="${{ secrets.DISCORD_WEBHOOK_ID }}" \
               -e TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" \
               -e TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -e AIRTABLE_KEY="${{ secrets.AIRTABLE_KEY }}" \
+              -e AIRTABLE_BASE_ID="${{ secrets.AIRTABLE_BASE_ID }}" \
               agent-serp-worker

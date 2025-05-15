@@ -10,6 +10,7 @@ dependencies = [
     "html2text>=2025.4.15",
     "notion-client>=2.3.0",
     "openai>=1.77.0",
+    "pyairtable>=3.1.1",
     "python-dotenv>=1.1.0",
     "pytz>=2025.2",
     "requests>=2.32.3",

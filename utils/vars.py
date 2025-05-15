@@ -9,8 +9,8 @@ def check_required_env_vars():
         'OPENROUTER_BASE_URL',
         'GROK3API',
         'GROK_API_KEY',
-        'SEEDREAM',
-        'DREAMINA',
+        'AIRTABLE_KEY',
+        'AIRTABLE_BASE_ID',
         'DAILY_TIME',
         'DISCORD_WEBHOOK_ID'
     ]

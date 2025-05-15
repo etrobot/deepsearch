@@ -1,10 +1,18 @@
 from app import dailyMission,get_todo_prompt
 from utils.notion import NotionMarkdownManager
+from utils.airtable import AirtableManager
 
 import os
 
 if __name__ == '__main__':
     os.environ['PROXY_URL'] = 'http://127.0.0.1:7890'
-    # dailyMission()
-    manager = NotionMarkdownManager(os.environ['NOTION_API_KEY'], os.environ['NOTION_DATABASE_ID'])
-    print(get_todo_prompt(manager,'1e637564-38fa-80d3-be89-fc417d7e537f'))
+    # airtable_manager = AirtableManager(
+    #         os.environ['AIRTABLE_KEY'],
+    #         os.environ['AIRTABLE_BASE_ID'],
+    #         'prompts'
+    #     )
+
+    # airtable_records = airtable_manager.list_pending_prompts()
+
+    # print(airtable_manager)
+    dailyMission()
