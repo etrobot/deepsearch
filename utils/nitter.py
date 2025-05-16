@@ -9,7 +9,6 @@ import html2text
 logger = logging.getLogger(__name__)
 
 XURL = 'https://x.com/'
-DEFAULT_BASE_URL = os.environ['NITTER']
 DEFAULT_HEADERS = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6',
@@ -20,15 +19,12 @@ DEFAULT_HEADERS = {
 }
 
 def get_tweet_nitter(
-    tweet_id: str,
-    base_url: str = DEFAULT_BASE_URL,
+    nitter_tweet_url: str,
     parse_content: bool = True
 ) -> Dict:
     """获取单条推文的详细信息"""
-    logger.info(f"开始获取推文 - ID: {tweet_id}, 解析内容: {parse_content}")
+    logger.info(f"开始获取推文 - ID: {nitter_tweet_url}, 解析内容: {parse_content}")
 
-    # 保存原始URL，这将是我们的推文链接
-    original_tweet_link = tweet_id
 
     # 使用简化版的headers
     headers = {
@@ -38,9 +34,8 @@ def get_tweet_nitter(
         'User-Agent': DEFAULT_HEADERS['User-Agent'],
     }
 
-    tweet_url = f'{base_url}{tweet_id}'
     response = requests.get(
-        tweet_url,
+        nitter_tweet_url,
         headers=headers,
         verify=False,
     )
@@ -120,17 +115,6 @@ def extract_thread_links_nitter(html_content: str) -> list:
 
 
 def check_thread_using_nitter(nitter_link:str):
-    logger.info(f"原始链接: {nitter_link}")
-    if nitter_link.startswith(XURL):
-        nitter_link=nitter_link[len(XURL):]
-        logger.debug(f"移除XURL后: {nitter_link}")
-    if nitter_link.startswith(DEFAULT_BASE_URL):
-        nitter_link=nitter_link[len(DEFAULT_BASE_URL):]
-        logger.debug(f"移除DEFAULT_BASE_URL后: {nitter_link}")
-    if not '/status/' in nitter_link:
-        logger.warning("链接中不包含 /status/，返回空列表")
-        return []
-    logger.info(f"开始获取推文HTML，处理后的链接: {nitter_link}")
     rawhtml = get_tweet_nitter(nitter_link)
     logger.debug(f"获取到的HTML长度: {len(rawhtml)}")
     logger.debug(f"HTML片段预览: {rawhtml[:500]}")  # 只显示前500个字符
