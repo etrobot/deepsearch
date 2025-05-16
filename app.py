@@ -24,6 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv(find_dotenv())
+set_env_from_airtable_data()
 
 def validate_notion_response(response, context=""):
     """验证 Notion API 响应"""
