@@ -66,7 +66,7 @@ def dailyMission():
                 logger.info(f"[处理记录][{idx}] 开始处理记录: id={id}, status={status}")
 
                 # 获取 todo_prompt
-                todo_prompt = nitter_list_rss(record['fields']['nitter_rss'])
+                todo_prompt = nitter_list_rss(record['fields']['nitter_rss'],15)
                 todo_prompt += 'pick the hottest topic from these tweets by verified accounts and use embedding mode to search more recent topic-related hot posts and output a xaiArtifact report'
                 if todo_prompt is None:
                     logger.info(f"[处理记录][{idx}] 跳过空内容记录")

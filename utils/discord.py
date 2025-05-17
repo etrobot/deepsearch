@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 class DiscordWebhook:
     def __init__(self, webhook_url=None, proxies=None):
+        if webhook_url is None:
+            webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
         self.webhook_url = webhook_url
         if not self.webhook_url:
             raise ValueError("Discord webhook URL 未设置")

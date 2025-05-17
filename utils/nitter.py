@@ -121,7 +121,7 @@ def check_thread_using_nitter(nitter_link:str):
     links = extract_thread_links_nitter(rawhtml)
     return links
 
-def nitter_list_rss(rss_url):
+def nitter_list_rss(rss_url, max_num=None):
     """将RSS内容转换为markdown格式的文本
 
     Args:
@@ -135,6 +135,8 @@ def nitter_list_rss(rss_url):
     result = []
 
     for i in range(len(feed.entries)):
+        if max_num and max_num>=i+1:
+            break
         entry = feed.entries[i]
         link = entry.link.replace('http://localhost:8080','x.com').replace('localhost:8080','x.com').replace('#m','')
         text_maker = html2text.HTML2Text()
