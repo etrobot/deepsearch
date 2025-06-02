@@ -5,9 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.12.6",
     "apscheduler>=3.11.0",
     "feedparser>=6.0.11",
     "html2text>=2025.4.15",
+    "nodriver>=0.46.1",
     "notion-client>=2.3.0",
     "openai>=1.77.0",
     "pyairtable>=3.1.1",
@@ -16,4 +18,5 @@ dependencies = [
     "requests>=2.32.3",
     "setuptools>=80.7.1",
     "standard-imghdr>=3.13.0",
+    "zendriver>=0.8.0",
 ]
