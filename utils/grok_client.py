@@ -3,8 +3,8 @@ import json
 import logging
 import websockets
 from typing import Optional, Dict, Any
-from utils.cdp_tools import create_new_tab, close_tab_by_ws_url
-from utils.grok_utils import FIND_ELEMENT_JS
+from .cdp_tools import create_new_tab, close_tab_by_ws_url
+from .grok_utils import FIND_ELEMENT_JS
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class GrokClient:
             await self.ws.close()
         if self.ws_url:
             close_tab_by_ws_url(self.ws_url)
-            logger.info('已关闭tab')
+            logger.debug('已关闭tab')
 
     async def _send_message(self, method: str, params: Optional[Dict] = None) -> Dict:
         """发送消息到 Chrome DevTools Protocol"""
@@ -51,7 +51,7 @@ class GrokClient:
             resp = await self.ws.recv()
             data = json.loads(resp)
             if data.get('method') == 'Page.loadEventFired':
-                logger.info('页面加载完成')
+                logger.debug('页面加载完成')
                 break
 
     async def evaluate_js(self, expression: str) -> Any:
@@ -61,7 +61,7 @@ class GrokClient:
 
     async def toggle_deepsearch(self, enable: bool) -> bool:
         """切换DeepSearch功能"""
-        logger.info(f'切换DeepSearch: enable={enable}')
+        logger.debug(f'切换DeepSearch: enable={enable}')
         
         js_get_btn = '''
             (() => {
@@ -112,7 +112,7 @@ class GrokClient:
                 try:
                     btn_info = json.loads(btn_info) if btn_info else {}
                     if btn_info.get('ariaPressed') == target:
-                        logger.info('DeepSearch切换成功')
+                        logger.debug('DeepSearch切换成功')
                         return True
                 except json.JSONDecodeError:
                     continue
@@ -125,13 +125,32 @@ class GrokClient:
 
     async def ask_grok(self, question: str, deepsearch: bool = True) -> Optional[str]:
         """向Grok提问并获取回答"""
-        logger.info(f'提问: {question}, deepsearch={deepsearch}')
+        logger.debug(f'提问: {question}, deepsearch={deepsearch}')
         
         # 启用DeepSearch
         if deepsearch:
             if not await self.toggle_deepsearch(True):
                 raise RuntimeError('DeepSearch启用失败')
         
+        # 输入问题前等待 textarea 出现
+        js_check_textarea = f'''
+            (() => {{
+                let params = {{tag: 'textarea'}};
+                let result = {FIND_ELEMENT_JS}(params);
+                return result.length > 0 ? 'found' : 'notfound';
+            }})()
+        '''
+        for _ in range(20):  # 最多等10秒
+            textarea_status = await self.evaluate_js(js_check_textarea)
+            if textarea_status == 'found':
+                logger.debug('已检测到textarea')
+                break
+            logger.warning('未检测到textarea，重试中...')
+            await asyncio.sleep(0.5)
+        else:
+            logger.error('长时间未检测到textarea，放弃提问')
+            return None
+
         # 输入问题
         js_set_question = f'''
             (() => {{
@@ -165,21 +184,26 @@ class GrokClient:
         target_api = '/rest/app-chat/conversations/new'
         target_request_id = None
         
-        while True:
-            resp = await self.ws.recv()
-            data = json.loads(resp)
-            
-            if data.get('method') == 'Network.requestWillBeSent':
-                url = data['params']['request']['url']
-                if target_api in url:
-                    target_request_id = data['params']['requestId']
-                    logger.info(f'捕获到目标API请求: {url}, requestId={target_request_id}')
-                    
-            if data.get('method') == 'Network.loadingFinished' and target_request_id:
-                if data['params']['requestId'] == target_request_id:
-                    result = await self._send_message("Network.getResponseBody", 
-                                                    {"requestId": target_request_id})
-                    return result.get('result', {}).get('body')
+        async def wait_for_api_response():
+            nonlocal target_request_id
+            while True:
+                resp = await self.ws.recv()
+                data = json.loads(resp)
+                if data.get('method') == 'Network.requestWillBeSent':
+                    url = data['params']['request']['url']
+                    if target_api in url:
+                        target_request_id = data['params']['requestId']
+                        logger.debug(f'捕获到目标API请求: {url}, requestId={target_request_id}')
+                if data.get('method') == 'Network.loadingFinished' and target_request_id:
+                    if data['params']['requestId'] == target_request_id:
+                        result = await self._send_message("Network.getResponseBody", 
+                                                        {"requestId": target_request_id})
+                        return result.get('result', {}).get('body')
+        try:
+            return await asyncio.wait_for(wait_for_api_response(), timeout=900)
+        except asyncio.TimeoutError:
+            logger.error('等待API响应超时（10分钟）')
+            return None
 
 async def grok_ask_api_async(question: str, deepsearch: bool = True) -> Optional[str]:
     """异步API：向Grok提问"""
@@ -189,9 +213,9 @@ async def grok_ask_api_async(question: str, deepsearch: bool = True) -> Optional
 
 def grok_ask_api(question: str, deepsearch: bool = True) -> Optional[str]:
     """同步API：向Grok提问"""
-    logger.info(f'grok_ask_api 入参: question={question}, deepsearch={deepsearch}')
+    logger.debug(f'grok_ask_api 入参: question={question}, deepsearch={deepsearch}')
     result = asyncio.run(grok_ask_api_async(question, deepsearch))
-    logger.info(f'grok_ask_api 出参: {result[:200] if result else result}')
+    logger.debug(f'grok_ask_api 出参: {result[:200] if result else result}')
     return result
 
 __all__ = ['GrokClient', 'grok_ask_api', 'grok_ask_api_async']

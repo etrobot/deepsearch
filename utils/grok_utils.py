@@ -34,17 +34,17 @@ FIND_ELEMENT_JS = """
 
 def parse_grok_result(response: str) -> Optional[Dict[str, Any]]:
     """
-    解析grok返回的多行JSON字符串，结构化返回结果。
+    解析grok返回的多行JSON字符串，提取所有modelResponse.message内容，拼接成完整答案。
     
     Args:
         response: Grok API返回的响应字符串
         
     Returns:
-        解析后的结构化数据，如果解析失败则返回None
+        {"messages": [msg1, msg2, ...], "full_message": "..."}，如果解析失败则返回None
     """
     if not response:
         return None
-        
+    
     # 1. 错误字符串处理
     if isinstance(response, str) and response.startswith('Error:'):
         error_data = handle_str_error(response)
@@ -55,43 +55,19 @@ def parse_grok_result(response: str) -> Optional[Dict[str, Any]]:
     if 'This service is not available in your region' in response:
         return {'error': 'This service is not available in your region'}
 
-    final_dict = {}
-    grok_info = {}
-    new_title = None
-
-    # 3. 按行解析JSON字符串
+    messages = []
     for line in response.splitlines():
         try:
             parsed = json.loads(line)
-            # 以grok解析结构为例，假设有grokResult、meta等字段
-            if "grokResult" in parsed.get("result", {}):
-                parsed["result"]["response"] = {"grokResult": parsed["result"].pop("grokResult")}
-            if "meta" in parsed.get("result", {}):
-                grok_info = parsed["result"]["meta"]
-            if "title" in parsed.get("result", {}):
-                new_title = parsed["result"]["title"].get("newTitle")
-            if "grokResult" in parsed.get("result", {}).get("response", {}):
-                final_dict = parsed
-            elif "grokResult" in parsed.get("result", {}):
-                parsed["result"]["response"] = grok_info
+            # 提取modelResponse.message
+            msg = parsed.get("result", {}).get("response", {}).get("modelResponse", {}).get("message")
+            if msg:
+                messages.append(msg)
         except (json.JSONDecodeError, KeyError, AttributeError) as e:
             logger.warning(f"解析JSON行时出错: {e}")
             continue
-
-    # 4. 组装最终结构
-    if final_dict and "result" in final_dict:
-        grok_result = final_dict["result"].get("response", {}).get("grokResult")
-        if grok_result:
-            final_dict["result"]["response"] = {"grokResult": grok_result}
-            final_dict["result"]["response"].update({
-                "metaId": grok_info.get("metaId"),
-                "title": grok_info.get("title"),
-                "createTime": grok_info.get("createTime"),
-                "modifyTime": grok_info.get("modifyTime"),
-                "temporary": grok_info.get("temporary"),
-                "newTitle": new_title
-            })
-            return final_dict
+    if messages:
+        return {"messages": messages, "full_message": "".join(messages)}
     return None
 
 def handle_str_error(error_str: str) -> Dict[str, str]:
