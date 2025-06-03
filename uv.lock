@@ -198,6 +198,7 @@ dependencies = [
     { name = "requests" },
     { name = "setuptools" },
     { name = "standard-imghdr" },
+    { name = "websockets" },
     { name = "zendriver" },
 ]
 
@@ -216,6 +217,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.3" },
     { name = "setuptools", specifier = ">=80.7.1" },
     { name = "standard-imghdr", specifier = ">=3.13.0" },
+    { name = "websockets", specifier = ">=15.0.1" },
     { name = "zendriver", specifier = ">=0.8.0" },
 ]
 
