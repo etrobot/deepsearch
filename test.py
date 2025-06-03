@@ -1,60 +1,26 @@
-import asyncio
-import websockets
-import json
-import requests
+import logging
+from grok_client import grok_ask_api
+from utils.grok_utils import parse_grok_result
 
-# 获取可用的 DevTools 页面
-resp = requests.get('http://127.0.0.1:9223/json')
-pages = resp.json()
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(message)s')
 
-# 新建tab（target）
-def create_new_tab():
-    url = 'http://127.0.0.1:9223/json/new?url=https://grok.com'
-    try:
-        ws_url = requests.put(url).json()['webSocketDebuggerUrl']
-    except Exception as e:
-        print(f"[WARN] 新建tab失败，原因: {e}. 尝试复用已有tab。")
-        ws_url = requests.get('http://127.0.0.1:9223/json').json()[0]['webSocketDebuggerUrl']
-    # 必须补端口号，否则CDP默认返回无端口的ws url
-    if ws_url.startswith('ws://127.0.0.1/devtools'):
-        ws_url = ws_url.replace('ws://127.0.0.1/', 'ws://127.0.0.1:9223/')
-    return ws_url
+def main():
+    # 示例用法
+    question = "hostest AI Video model on X"
     
-async def main():
-    async with websockets.connect(create_new_tab()) as ws:
-        msg_id = 1
-        # 启用 Page 域
-        await ws.send(json.dumps({"id": msg_id, "method": "Page.enable"}))
-        await ws.recv()
-        msg_id += 1
-        # 导航到grok.com
-        await ws.send(json.dumps({
-            "id": msg_id,
-            "method": "Page.navigate",
-            "params": {"url": "https://grok.com"}
-        }))
-        msg_id += 1
-        # 等待 Page.loadEventFired 事件
-        while True:
-            resp = await ws.recv()
-            data = json.loads(resp) 
-            if data.get('method') == 'Page.loadEventFired':
-                break
-        # 获取页面HTML
-        await ws.send(json.dumps({
-            "id": msg_id,
-            "method": "Runtime.evaluate",
-            "params": {
-                "expression": "document.documentElement.outerHTML"
-            }
-        }))
-        while True:
-            resp = await ws.recv()
-            data = json.loads(resp)
-            if data.get('id') == msg_id:
-                html = data['result']['result']['value']
-                print(html)
-                break
+    # 调用 Grok API 获取原始响应
+    raw_response = grok_ask_api(question, deepsearch=True)
+    print(f'原始响应: {raw_response[:200]}...' if raw_response else '无响应')
+    
+    # 解析响应
+    if raw_response:
+        parsed_result = parse_grok_result(raw_response)
+        if parsed_result:
+            print('\n=== 解析结果 ===')
+            print(parsed_result)
+        else:
+            print('无法解析响应')
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
