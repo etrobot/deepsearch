@@ -18,7 +18,7 @@ DONT USE BRANDS OR PRODUCTS SUCH AI OPENAI, GOOGLE, XAI, ANTHROPIC AND SO ON!
     prompt= f'{sys_prompt} output English json like {jsonformat} to call a serp tool, user query:\n'+prompt
     llm_client = get_llm_client()
     model='gpt-4o-mini'
-    desc = llm_gen_dict(llm_client,model,prompt,jsonformat)
+    desc = llm_gen_dict(llm_client,model,prompt[:600],jsonformat)
     logger.info(f'[generate_image] 生成的描述: {desc}')
 
     # 从环境变量获取配置

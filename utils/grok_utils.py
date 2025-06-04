@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ FIND_ELEMENT_JS = """
     }).filter(x=>x);
 })"""
 
-def parse_grok_result(response: str) -> Optional[Dict[str, Any]]:
+def parse_grok_result(response: str) -> str:
     """
     解析grok返回的多行JSON字符串，提取所有modelResponse.message内容，拼接成完整答案。
     
@@ -67,7 +67,7 @@ def parse_grok_result(response: str) -> Optional[Dict[str, Any]]:
             logger.warning(f"解析JSON行时出错: {e}")
             continue
     if messages:
-        return {"messages": messages, "full_message": "".join(messages)}
+        return "".join(messages)
     return None
 
 def handle_str_error(error_str: str) -> Dict[str, str]:

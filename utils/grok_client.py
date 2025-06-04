@@ -4,7 +4,7 @@ import logging
 import websockets
 from typing import Optional, Dict, Any
 from .cdp_tools import create_new_tab, close_tab_by_ws_url
-from .grok_utils import FIND_ELEMENT_JS
+from .grok_utils import FIND_ELEMENT_JS,parse_grok_result
 
 logger = logging.getLogger(__name__)
 
@@ -217,5 +217,21 @@ def grok_ask_api(question: str, deepsearch: bool = True) -> Optional[str]:
     result = asyncio.run(grok_ask_api_async(question, deepsearch))
     logger.debug(f'grok_ask_api 出参: {result[:200] if result else result}')
     return result
+
+import re
+
+def call_grok_api(todo_content,deepsearch=False):
+    raw_response = grok_ask_api(todo_content, deepsearch)
+    if raw_response:
+        parsed_result = parse_grok_result(raw_response)
+        if parsed_result:
+            # 提取 <xaiArtifact ...>...</xaiArtifact> 之间的内容，支持多组
+            pattern = r'<xaiArtifact[^>]*>(.*?)</xaiArtifact>'
+            matches = re.findall(pattern, parsed_result, flags=re.DOTALL)
+            if matches:
+                return "\n".join(matches)
+            else:
+                return parsed_result
+    return None
 
 __all__ = ['GrokClient', 'grok_ask_api', 'grok_ask_api_async']

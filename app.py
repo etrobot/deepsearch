@@ -8,12 +8,12 @@ from apscheduler.triggers.cron import CronTrigger
 from pytz import timezone
 from utils.notion import NotionMarkdownManager
 from pyairtable import Table
-from utils.ripGrok import call_grok_api
 from utils.discord import DiscordWebhook
 from dotenv import load_dotenv,find_dotenv
 from utils.seedream import generate_image
 from utils.set_env import set_env_from_airtable_data
 import random,traceback
+from utils.grok_client import call_grok_api
 
 # 配置logging
 logging.basicConfig(
@@ -32,7 +32,7 @@ def validate_notion_response(response, context=""):
         raise ValueError(f"Notion API 返回空响应 {context}")
     return response
 
-def dailyMission():
+def dailyMission(maxlimit=99):
     logger.info(f"[定时任务] 开始执行dailyMission - {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
@@ -45,7 +45,7 @@ def dailyMission():
         airtable = Table(
             os.environ['AIRTABLE_KEY'],
             os.environ['AIRTABLE_BASE_ID'],
-            'prompts'
+            'prompt'
         )
 
         logger.info("[Notion] 初始化 NotionMarkdownManager")
@@ -59,6 +59,8 @@ def dailyMission():
         error_messages = []
 
         for idx, record in enumerate(airtable_records):
+            if idx >= min(maxlimit,len(airtable_records)):
+                break
             try:
                 id = record['id']
                 fields = record['fields']
@@ -78,7 +80,7 @@ def dailyMission():
 
                 logger.info(f"[处理记录][{idx}] 调用 grok api")
                 grok_result = validate_notion_response(
-                    call_grok_api(todo_prompt,'grok-3-deepsearch'),
+                    call_grok_api(todo_prompt,deepsearch=True),
                     f"调用 Grok API 处理记录 {id} 的内容"
                 )
                 title_format = {
@@ -158,12 +160,11 @@ def dailyMission():
                 )
 
                 # 更新 Airtable 记录状态和封面 URL
-                update_fields = {
-                    'status': 'Done'
-                }
+                update_fields = {}
                 if chosen_url:
                     update_fields['cover_url'] = chosen_url
-                airtable.update(id, update_fields)
+                if update_fields:
+                    airtable.update(id, update_fields)
 
                 success_count += 1
                 logger.info(f"[处理记录][{idx}] 记录处理完成")

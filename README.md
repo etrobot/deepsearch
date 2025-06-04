@@ -19,10 +19,7 @@ This project requires a configuration file (.env) in the project root containing
 - `NOTION_DATABASE_ID`: The ID of your Notion database (e.g., <YOUR_NOTION_DATABASE_ID>).
 - `OPENROUTER_API_KEY`: Your API key for the OpenRouter service (e.g., <YOUR_OPENROUTER_API_KEY>).
 - `OPENROUTER_BASE_URL`: The base URL for the OpenRouter API (e.g., <YOUR_OPENROUTER_BASE_URL>).
-- `SEEDREAM`: A seed string for Dream-related functionalities (e.g., <YOUR_SEEDREAM>).
 - `DREAMINA`: The API endpoint for Dreamina image generation (e.g., <YOUR_DREAMINA_ENDPOINT>).
-- `GROK_API_KEY`: Your API key for Grok (e.g., <YOUR_GROK_API_KEY>).
-- `GROK3API`: The API endpoint for Grok3 (e.g., <YOUR_GROK3API_ENDPOINT>).
 - `DAILY_TIME`: The scheduled time for the daily loop task (e.g., "17:19").
 - `DISCORD_WEBHOOK_ID`: The Discord webhook identifier for notifications (e.g., <YOUR_DISCORD_WEBHOOK_ID>).
 
