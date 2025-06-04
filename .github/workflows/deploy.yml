@@ -44,7 +44,7 @@ jobs:
             docker build -t agent-serp-worker .
             docker stop deepserper || true
             docker rm deepserper || true
-            docker run -d --name deepserper \
+            docker run -d --name deepserper --network host \
               -e AIRTABLE_KEY="${{ secrets.AIRTABLE_KEY }}" \
               -e AIRTABLE_BASE_ID="${{ secrets.AIRTABLE_BASE_ID }}" \
               agent-serp-worker
