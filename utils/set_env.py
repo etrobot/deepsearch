@@ -40,7 +40,7 @@ def set_env_from_airtable_data():
             sessionid = None
             try:
                 cj = browser_cookie3.chromium(
-                    cookie_file='/home/ubuntu/chromium-xvbf/browser-data',
+                    cookie_file='/browser-data',
                     domain_name='dreamina.capcut.com'
                 )
                 for c in cj:
