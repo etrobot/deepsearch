@@ -7,6 +7,7 @@ from .cdp_tools import create_new_tab, close_tab_by_ws_url
 from .grok_utils import FIND_ELEMENT_JS,parse_grok_result
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class GrokClient:
     def __init__(self):
