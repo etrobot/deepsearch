@@ -1,7 +1,6 @@
 import os
 import logging
 from pyairtable import Table
-import browser_cookie3
 
 def set_env_from_airtable_data():
     """从 Airtable 数据设置环境变量，dreamina 优先尝试 browser_cookie3 获取 sessionid，获取不到再用 Airtable 的 api key"""
@@ -36,24 +35,7 @@ def set_env_from_airtable_data():
             
         elif name == 'dreamina':
             os.environ['DREAMINA_BASE_URL'] = fields['endpoint']
-            # 先尝试 browser_cookie3 获取 sessionid
-            sessionid = None
-            try:
-                cj = browser_cookie3.chromium(
-                    cookie_file='/home/ubuntu/chromium-xvbf/browser-data',
-                    domain_name='dreamina.capcut.com'
-                )
-                for c in cj:
-                    if c.domain == 'dreamina.capcut.com' and c.name == 'sessionid':
-                        sessionid = c.value
-                        break
-                if sessionid:
-                    os.environ['DREAMINA_SESSIONID'] = sessionid
-                    logging.info('已通过 browser_cookie3 获取并设置 DREAMINA_SESSIONID')
-                else:
-                    os.environ['DREAMINA_API_KEY'] = fields['key']
-            except Exception as e:
-                os.environ['DREAMINA_API_KEY'] = fields['key']
-                logging.warning(f'browser_cookie3 获取 sessionid 失败，已设置 DREAMINA_API_KEY: {e}')
+            os.environ['DREAMINA_API_KEY'] = fields['key']
+            logging.info('已设置 DREAMINA_API_KEY')
 
     logging.info("环境变量设置完成")

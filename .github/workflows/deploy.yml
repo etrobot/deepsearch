@@ -47,4 +47,5 @@ jobs:
             docker run -d --name deepserper --network host \
               -e AIRTABLE_KEY="${{ secrets.AIRTABLE_KEY }}" \
               -e AIRTABLE_BASE_ID="${{ secrets.AIRTABLE_BASE_ID }}" \
+              -v /home/ubuntu/chromium-xvbf/browser-data:/browser-data \
               agent-serp-worker

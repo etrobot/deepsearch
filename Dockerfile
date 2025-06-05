@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
 # Set the working directory
 WORKDIR /app
 
+RUN mkdir -p /browser-data
 # Install system dependencies, Git and build essentials
 RUN apt-get update && \
     apt-get install -y curl build-essential git cmake
