@@ -6,6 +6,9 @@ from typing import Optional, Dict, Any
 from .cdp_tools import create_new_tab, close_tab_by_ws_url
 from .grok_utils import FIND_ELEMENT_JS,parse_grok_result
 
+# 设置 websockets 库的日志级别为 INFO
+logging.getLogger('websockets').setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -34,10 +37,10 @@ class GrokClient:
         msg = {"id": self.msg_id, "method": method}
         if params:
             msg["params"] = params
-        
+
         await self.ws.send(json.dumps(msg))
         self.msg_id += 1
-        
+
         while True:
             resp = await self.ws.recv()
             data = json.loads(resp)
@@ -63,7 +66,7 @@ class GrokClient:
     async def toggle_deepsearch(self, enable: bool) -> bool:
         """切换DeepSearch功能"""
         logger.debug(f'切换DeepSearch: enable={enable}')
-        
+
         js_get_btn = '''
             (() => {
                 try {
@@ -80,7 +83,7 @@ class GrokClient:
                 }
             })()
         '''
-        
+
         # 查找并切换按钮状态
         for _ in range(5):
             btn_info = await self.evaluate_js(js_get_btn)
@@ -89,13 +92,13 @@ class GrokClient:
             except json.JSONDecodeError:
                 logger.error(f"按钮信息解析失败: {btn_info}")
                 continue
-                
+
             if btn_info.get('found'):
                 current = btn_info.get('ariaPressed')
                 target = 'true' if enable else 'false'
                 if current == target:
                     return True
-                    
+
                 # 点击按钮
                 js_click = '''
                     (() => {
@@ -107,7 +110,7 @@ class GrokClient:
                     })()
                 '''
                 await self.evaluate_js(js_click)
-                
+
                 # 验证状态是否更新
                 btn_info = await self.evaluate_js(js_get_btn)
                 try:
@@ -117,22 +120,22 @@ class GrokClient:
                         return True
                 except json.JSONDecodeError:
                     continue
-            
+
             logger.warning('未找到DeepSearch按钮，重试中...')
             await asyncio.sleep(0.5)
-            
+
         logger.error('DeepSearch切换失败')
         return False
 
     async def ask_grok(self, question: str, deepsearch: bool = True) -> Optional[str]:
         """向Grok提问并获取回答"""
         logger.debug(f'提问: {question}, deepsearch={deepsearch}')
-        
+
         # 启用DeepSearch
         if deepsearch:
             if not await self.toggle_deepsearch(True):
                 raise RuntimeError('DeepSearch启用失败')
-        
+
         # 输入问题前等待 textarea 出现
         js_check_textarea = f'''
             (() => {{
@@ -167,7 +170,7 @@ class GrokClient:
             }})()
         '''
         await self.evaluate_js(js_set_question)
-        
+
         # 点击发送
         js_click_send = f'''
             (() => {{
@@ -180,11 +183,11 @@ class GrokClient:
             }})()
         '''
         await self.evaluate_js(js_click_send)
-        
+
         # 捕获API响应
         target_api = '/rest/app-chat/conversations/new'
         target_request_id = None
-        
+
         async def wait_for_api_response():
             nonlocal target_request_id
             while True:
@@ -197,7 +200,7 @@ class GrokClient:
                         logger.debug(f'捕获到目标API请求: {url}, requestId={target_request_id}')
                 if data.get('method') == 'Network.loadingFinished' and target_request_id:
                     if data['params']['requestId'] == target_request_id:
-                        result = await self._send_message("Network.getResponseBody", 
+                        result = await self._send_message("Network.getResponseBody",
                                                         {"requestId": target_request_id})
                         return result.get('result', {}).get('body')
         try:
